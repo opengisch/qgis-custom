@@ -7,3 +7,7 @@ pr = 68084
 
 [[merge]]
 pr = 68058
+
+[[merge]]
+repo = "3nids/QGIS"
+branch = "custom-commit-error-handler"
