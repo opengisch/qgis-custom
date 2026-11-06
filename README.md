@@ -55,17 +55,12 @@ To redo a bad resolution, run `git rerere forget <path>` during the conflict. re
 delete/modify conflict, or with a merge that is clean but does not compile. In that case, push a fix branch to
 opengisch/QGIS and add it as an entry.
 
-## Build and release
+## Build
 
 - **Pull request:** composes every version, without a build.
 - **Push to main:** composes every version, pushes each one to opengisch/QGIS, and builds it. The zip is kept as an
   artifact for 90 days. A push that changes only this README or `release.yml` builds nothing. To build again without
   a commit, for example to take a newer master, run the workflow by hand: Actions → build → Run workflow.
-- **Release:** Actions → release → Run workflow, with a version and a tag. It takes the last build of that version
-  on main, and publishes it as the release `<version>-<tag>`, with the zip and the manifest. While a build of main
-  is running, it refuses: wait until the build is done. It does not build again: the release is the zip that was
-  built. It also tags the composed commit `qgis-custom/<version>-<tag>` in opengisch/QGIS, so that the commit stays
-  when the branch moves on.
 
 The build follows `windows-qt6.yml` of qgis/QGIS. The head of [`build.yml`](.github/workflows/build.yml) names the
 upstream commit it follows. When upstream changes its steps or its flags, copy the change.
@@ -74,6 +69,33 @@ The dependencies come from the vcpkg binary cache of qgis/QGIS. ccache keeps the
 The first build, or a build after a big jump of master, can take longer than the 6 h limit of a job. The build step
 stops at 5 h 30, and the cache is saved. Click "Re-run failed jobs": the run builds the same commit, and continues
 where it stopped.
+
+## Release
+
+The workflow `release` makes the releases. Do not create a release on the Releases page: it gets no zip.
+
+1. In Actions → build, check that the last run on main succeeded, and that no run is in progress.
+2. Actions → release → Run workflow. Choose the version, and type a tag, for example `1`.
+3. When the run is done, the release `<version>-<tag>`, for example `qgis-dmav-1`, is on the Releases page. Its
+   asset is the zip `qgis-custom-<version>-<tag>-win64.zip`, and its notes are the manifest.
+
+From a terminal:
+
+```sh
+gh workflow run release.yml -R opengisch/qgis-custom -f version=qgis-dmav -f tag=1
+```
+
+The release does not build: it publishes the zip of the last build of that version on main, in a few minutes. It
+also tags the composed commit `qgis-custom/<version>-<tag>` in opengisch/QGIS, so that the commit stays when the
+branch moves on. The run fails, and changes nothing, while a build of main is running, when no build of the version
+on main is left, or when the release exists already.
+
+To redo a release, delete it, with its tag here and its tag in opengisch/QGIS, and run the workflow again:
+
+```sh
+gh release delete qgis-dmav-1 -R opengisch/qgis-custom --cleanup-tag --yes
+gh api -X DELETE repos/opengisch/QGIS/git/refs/tags/qgis-custom/qgis-dmav-1
+```
 
 ## Setup
 

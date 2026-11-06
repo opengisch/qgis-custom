@@ -12,7 +12,7 @@ on:
         options:
           - qgis-dmav
       tag:
-        description: The release is named <version>-<tag>
+        description: The release is named <version>-<tag>, for example qgis-dmav-1 for the tag 1
         type: string
         required: true
 
@@ -63,13 +63,7 @@ jobs:
           github-token: ${{ github.token }}
           path: dist
 
-      - name: Tag the composed commit in opengisch/QGIS
-        env:
-          GH_TOKEN: ${{ secrets.QGIS_FORK_TOKEN }}
-        run: |
-          gh api repos/opengisch/QGIS/git/refs -f "ref=refs/tags/qgis-custom/$NAME" \
-            -f "sha=$(sed -n 's/^Composed: //p' "dist/$VERSION.md")"
-
+      # Before the tag in opengisch/QGIS: a release that exists already stops the run before it changes anything
       - name: Publish the release
         env:
           SHA: ${{ steps.build.outputs.sha }}
@@ -77,3 +71,10 @@ jobs:
           mv dist/*-win64.zip "qgis-custom-$NAME-win64.zip"
           gh release create "$NAME" "qgis-custom-$NAME-win64.zip" --repo "$GITHUB_REPOSITORY" \
             --target "$SHA" --title "$NAME" --notes-file "dist/$VERSION.md"
+
+      - name: Tag the composed commit in opengisch/QGIS
+        env:
+          GH_TOKEN: ${{ secrets.QGIS_FORK_TOKEN }}
+        run: |
+          gh api repos/opengisch/QGIS/git/refs -f "ref=refs/tags/qgis-custom/$NAME" \
+            -f "sha=$(sed -n 's/^Composed: //p' "dist/$VERSION.md")"
