@@ -31,6 +31,12 @@ jobs:
       - name: Find the last build of the version on main
         id: build
         run: |
+          running=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --branch main --json status \
+            --jq '[.[] | select(.status != "completed")] | length')
+          if [ "$running" != 0 ]; then
+            echo "::error::A build of main is still running: release when it is done"
+            exit 1
+          fi
           build=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=qgis-custom-$VERSION-win64" --jq \
             '[.artifacts[] | select(.workflow_run.head_branch == "main" and (.expired | not))][0] // empty
              | "\(.workflow_run.id) \(.workflow_run.head_sha)"')

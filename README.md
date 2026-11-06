@@ -59,12 +59,13 @@ opengisch/QGIS and add it as an entry.
 
 - **Pull request:** composes every version, without a build.
 - **Push to main:** composes every version, pushes each one to opengisch/QGIS, and builds it. The zip is kept as an
-  artifact for 90 days. A push that changes only this README builds nothing. To build again without a commit, for
-  example to take a newer master, run the workflow by hand: Actions → build → Run workflow.
+  artifact for 90 days. A push that changes only this README or `release.yml` builds nothing. To build again without
+  a commit, for example to take a newer master, run the workflow by hand: Actions → build → Run workflow.
 - **Release:** Actions → release → Run workflow, with a version and a tag. It takes the last build of that version
-  on main, and publishes it as the release `<version>-<tag>`, with the zip and the manifest. It does not build
-  again: the release is the zip that was built. It also tags the composed commit `qgis-custom/<version>-<tag>` in
-  opengisch/QGIS, so that the commit stays when the branch moves on.
+  on main, and publishes it as the release `<version>-<tag>`, with the zip and the manifest. While a build of main
+  is running, it refuses: wait until the build is done. It does not build again: the release is the zip that was
+  built. It also tags the composed commit `qgis-custom/<version>-<tag>` in opengisch/QGIS, so that the commit stays
+  when the branch moves on.
 
 The build follows `windows-qt6.yml` of qgis/QGIS. The head of [`build.yml`](.github/workflows/build.yml) names the
 upstream commit it follows. When upstream changes its steps or its flags, copy the change.
@@ -76,6 +77,6 @@ where it stopped.
 
 ## Setup
 
-The secret `QGIS_FORK_TOKEN` pushes the branches and tags to opengisch/QGIS. It is a fine-grained token or a GitHub App token, on
-opengisch/QGIS only, with **Contents** and **Workflows** write. Workflows write is necessary because the commits of
-master change `.github/workflows/`.
+The secret `QGIS_FORK_TOKEN` pushes the branches and tags to opengisch/QGIS. It is a fine-grained token or a GitHub
+App token, on opengisch/QGIS only, with **Contents** and **Workflows** write. Workflows write is necessary because
+the commits of master change `.github/workflows/`.

@@ -11,6 +11,7 @@ on:
       - main
     paths-ignore:
       - README.md
+      - .github/workflows/release.yml
   workflow_dispatch:
 
 # Builds on main wait for each other: a build takes hours, and a newer one does not cancel it
