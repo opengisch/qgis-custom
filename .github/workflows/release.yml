@@ -47,7 +47,6 @@ jobs:
           read -r run sha <<< "$build"
           echo "Releasing the build of run $run, at commit $sha"
           echo "run=$run" >> "$GITHUB_OUTPUT"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -63,14 +62,14 @@ jobs:
           github-token: ${{ github.token }}
           path: dist
 
-      # Before the tag in opengisch/QGIS: a release that exists already stops the run before it changes anything
+      # Before the tag in opengisch/QGIS: a release that exists already stops the run before it changes anything.
+      # The tag goes on main, not on the commit of the build: GITHUB_TOKEN may not tag a commit whose workflows
+      # differ from those of main.
       - name: Publish the release
-        env:
-          SHA: ${{ steps.build.outputs.sha }}
         run: |
           mv dist/*-win64.zip "qgis-custom-$NAME-win64.zip"
           gh release create "$NAME" "qgis-custom-$NAME-win64.zip" --repo "$GITHUB_REPOSITORY" \
-            --target "$SHA" --title "$NAME" --notes-file "dist/$VERSION.md"
+            --title "$NAME" --notes-file "dist/$VERSION.md"
 
       - name: Tag the composed commit in opengisch/QGIS
         env:
