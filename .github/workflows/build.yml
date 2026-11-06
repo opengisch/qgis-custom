@@ -1,6 +1,6 @@
-# Composes the versions of versions/ and builds one of them for Windows.
-# A pull request or a push to main checks that every version composes. Run it by hand (Actions → build → Run
-# workflow) to build a version; with a tag, it also publishes the release <version>-<tag>.
+# Composes the versions of versions/ and builds them for Windows.
+# A pull request checks that every version composes. A push to main, or a run by hand (Actions → build → Run
+# workflow), also pushes each version to opengisch/QGIS and builds it; the workflow release publishes such a build.
 # The build job mirrors .github/workflows/windows-qt6.yml of qgis/QGIS at 19a6ceae62d32d255f480821f60b2701ed236c73.
 name: build
 
@@ -9,20 +9,14 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - README.md
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version to build, a file of versions/
-        type: choice
-        options:
-          - qgis-dmav
-      tag:
-        description: Publish the release <version>-<tag>; empty for a build only
-        type: string
 
+# Builds on main wait for each other: a build takes hours, and a newer one does not cancel it
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.version || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -34,58 +28,48 @@ env:
   GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
 
 jobs:
-  check:
-    if: github.event_name != 'workflow_dispatch'
+  compose:
     runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.compose.outputs.versions }}
+      shas: ${{ steps.compose.outputs.shas }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Compose every version
+        id: compose
         run: |
           for version in versions/*.toml; do
             python3 compose.py "$(basename "$version" .toml)"
           done
-
-  compose:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      sha: ${{ steps.compose.outputs.sha }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Compose
-        id: compose
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          python3 compose.py "$VERSION"
-          echo "sha=$(git -C work/QGIS rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git -C work/QGIS for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/heads/qgis-custom/ \
+            | jq -Rn '[inputs | split(" ") | {key: .[0], value: .[1]}] | from_entries' > shas.json
+          echo "versions=$(jq -c keys shas.json)" >> "$GITHUB_OUTPUT"
+          echo "shas=$(jq -c . shas.json)" >> "$GITHUB_OUTPUT"
 
       - name: Push to opengisch/QGIS
+        if: github.event_name != 'pull_request'
         env:
           TOKEN: ${{ secrets.QGIS_FORK_TOKEN }}
-          VERSION: ${{ inputs.version }}
-          TAG: ${{ inputs.tag }}
         run: |
-          # The branch is composed again each time; a tag that exists already is never moved
-          refs=("+HEAD:refs/heads/qgis-custom/$VERSION")
-          if [ -n "$TAG" ]; then
-            refs+=("HEAD:refs/tags/qgis-custom/$VERSION-$TAG")
-          fi
-          git -C work/QGIS push "https://x-access-token:$TOKEN@github.com/opengisch/QGIS.git" "${refs[@]}"
+          git -C work/QGIS push "https://x-access-token:$TOKEN@github.com/opengisch/QGIS.git" \
+            "+refs/heads/qgis-custom/*:refs/heads/qgis-custom/*"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name != 'pull_request'
         with:
-          name: manifest
-          path: work/${{ inputs.version }}.md
+          name: manifests
+          path: work/*.md
 
   build:
     needs: compose
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(needs.compose.outputs.versions) }}
     runs-on: windows-2022
     permissions:
       contents: read
@@ -95,7 +79,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opengisch/QGIS
-          ref: ${{ needs.compose.outputs.sha }}
+          ref: ${{ fromJSON(needs.compose.outputs.shas)[matrix.version] }}
           fetch-depth: 2
           persist-credentials: false
 
@@ -181,33 +165,12 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: build-logs-x64-windows
+          name: build-logs-${{ matrix.version }}
           path: |
             C:/src/**/*.log
 
       - name: 📤 Upload bundle
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: qgis-custom-${{ inputs.version }}-win64
+          name: qgis-custom-${{ matrix.version }}-win64
           path: build/*-win64.zip
-
-  release:
-    needs: [compose, build]
-    if: inputs.tag != ''
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          path: dist
-
-      - name: Publish the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
-          NAME: ${{ inputs.version }}-${{ inputs.tag }}
-        run: |
-          mv dist/qgis-custom-"$VERSION"-win64/*-win64.zip "qgis-custom-$NAME-win64.zip"
-          gh release create "$NAME" "qgis-custom-$NAME-win64.zip" --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --title "$NAME" --notes-file "dist/manifest/$VERSION.md"
