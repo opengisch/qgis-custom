@@ -1,0 +1,213 @@
+# Composes the versions of versions/ and builds one of them for Windows.
+# A pull request or a push to main checks that every version composes. Run it by hand (Actions → build → Run
+# workflow) to build a version; with a tag, it also publishes the release <version>-<tag>.
+# The build job mirrors .github/workflows/windows-qt6.yml of qgis/QGIS at 19a6ceae62d32d255f480821f60b2701ed236c73.
+name: build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, a file of versions/
+        type: choice
+        options:
+          - open-dmav
+      tag:
+        description: Publish the release <version>-<tag>; empty for a build only
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+permissions:
+  contents: read
+
+env:
+  GIT_AUTHOR_NAME: github-actions[bot]
+  GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+  GIT_COMMITTER_NAME: github-actions[bot]
+  GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+
+jobs:
+  check:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compose every version
+        run: |
+          for version in versions/*.toml; do
+            python3 compose.py "$(basename "$version" .toml)"
+          done
+
+  compose:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.compose.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compose
+        id: compose
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 compose.py "$VERSION"
+          echo "sha=$(git -C work/QGIS rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Push to opengisch/QGIS
+        env:
+          TOKEN: ${{ secrets.QGIS_FORK_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          # The branch is composed again each time; a tag that exists already is never moved
+          refs=("+HEAD:refs/heads/qgis-custom/$VERSION")
+          if [ -n "$TAG" ]; then
+            refs+=("HEAD:refs/tags/qgis-custom/$VERSION-$TAG")
+          fi
+          git -C work/QGIS push "https://x-access-token:$TOKEN@github.com/opengisch/QGIS.git" "${refs[@]}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: manifest
+          path: work/${{ inputs.version }}.md
+
+  build:
+    needs: compose
+    runs-on: windows-2022
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: 🐣 Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opengisch/QGIS
+          ref: ${{ needs.compose.outputs.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: 🔨 Uninstall system cmake
+        shell: bash
+        run: |
+          choco uninstall cmake.install
+
+      - name: 🐩 Install CMake and Ninja
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9
+        with:
+          cmakeVersion: 3.31.6
+
+      - name: 🧽 Developer Command Prompt for Microsoft Visual C++
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 #v1
+
+      - name: 🎡 Setup vcpkg
+        uses: ./.github/actions/setup-vcpkg
+
+      - name: 🦬 Setup flex/bison
+        uses: robinraju/release-downloader@28fc21f50d76778e7023361aa1f863e717d3d56f #v1.13
+        with:
+          repository: 'lexxmark/winflexbison'
+          fileName: '*.zip'
+          tag: 'v2.5.24'
+          extract: true
+
+      - name: 🛍️ Setup ccache
+        uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d #v1.2
+        with:
+          max-size: 1G
+          key: build-ccache-win64-qt6-qgis-custom
+
+      - name: 🛍️ Tune ccache configuration
+        shell: bash
+        run: |
+          # To make ccache work properly with precompiled headers
+          ccache --set-config sloppiness=pch_defines,time_macros,include_file_mtime,include_file_ctime
+
+      - name: 🌋 Install dependencies and build
+        # Stops before the 6 h job limit, so the post step of ccache saves the cache: re-run the job to go on
+        timeout-minutes: 330
+        shell: bash
+        env:
+          X_VCPKG_ASSET_SOURCES: x-azurl,https://assetcache.open-vcpkg.org/assetcache,,read
+          # Reads the vcpkg binary cache of qgis/QGIS; its refusal of our uploads is only a warning
+          NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BUILD_DIR=$( cygpath "${{ github.workspace }}/build" )
+          SOURCE_DIR=$( cygpath "${{ github.workspace }}" )
+
+          cmake -S "${SOURCE_DIR}" \
+                -B "${BUILD_DIR}" \
+                -G Ninja \
+                -D CMAKE_BUILD_TYPE=Release \
+                -D WITH_VCPKG=ON \
+                -D CREATE_ZIP=ON \
+                -D VCPKG_TARGET_TRIPLET=x64-windows-release \
+                -D VCPKG_HOST_TRIPLET=x64-windows-release \
+                -D WITH_DESKTOP=ON \
+                -D WITH_3D=ON \
+                -D WITH_BINDINGS=ON \
+                -D WITH_GEOGRAPHICLIB=OFF \
+                -D WITH_SFCGAL=ON \
+                -D ENABLE_TESTS=OFF \
+                -D USE_CCACHE=ON \
+                -D ENABLE_UNITY_BUILDS=OFF \
+                -D FLEX_EXECUTABLE="${SOURCE_DIR}/win_flex.exe" \
+                -D BISON_EXECUTABLE="${SOURCE_DIR}/win_bison.exe" \
+                -D WITH_QTWEBENGINE=OFF \
+                -D VCPKG_INSTALL_OPTIONS="--x-buildtrees-root=C:/src" \
+                -D "NUGET_USERNAME=${GITHUB_ACTOR}" \
+                -D "NUGET_TOKEN=${NUGET_TOKEN}"
+
+          cmake --build "${BUILD_DIR}" --config Release
+
+      - name: 📦 Package
+        shell: bash
+        run: |
+          cmake --build "${{ github.workspace }}/build" --target bundle --config Release
+
+      - name: 📑 Upload dep build logs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: build-logs-x64-windows
+          path: |
+            C:/src/**/*.log
+
+      - name: 📤 Upload bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qgis-custom-${{ inputs.version }}-win64
+          path: build/*-win64.zip
+
+  release:
+    needs: [compose, build]
+    if: inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          NAME: ${{ inputs.version }}-${{ inputs.tag }}
+        run: |
+          mv dist/qgis-custom-"$VERSION"-win64/*-win64.zip "qgis-custom-$NAME-win64.zip"
+          gh release create "$NAME" "qgis-custom-$NAME-win64.zip" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "$NAME" --notes-file "dist/manifest/$VERSION.md"
