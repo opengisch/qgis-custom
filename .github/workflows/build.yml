@@ -16,6 +16,7 @@ on:
         type: choice
         options:
           - open-dmav
+          - qgis-dmav
       tag:
         description: Publish the release <version>-<tag>; empty for a build only
         type: string

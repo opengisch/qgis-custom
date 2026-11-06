@@ -1,0 +1,9 @@
+[base]
+repo = "qgis/QGIS"
+ref = "master"
+
+[[merge]]
+pr = 68084
+
+[[merge]]
+pr = 68058
