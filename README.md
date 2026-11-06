@@ -33,12 +33,12 @@ To add a version, add its file and add its name to the `version` options in
 ## Compose locally
 
 ```sh
-./compose.py open-dmav
+./compose.py qgis-dmav
 ```
 
 The script needs [uv](https://docs.astral.sh/uv/). The first run clones qgis/QGIS without its blobs into
-`work/QGIS`. All versions share that clone. The result is the branch `qgis-custom/open-dmav` there, and the
-manifest `work/open-dmav.md`.
+`work/QGIS`. All versions share that clone. The result is the branch `qgis-custom/qgis-dmav` there, and the
+manifest `work/qgis-dmav.md`.
 
 ## Conflicts
 

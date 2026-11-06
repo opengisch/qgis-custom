@@ -15,7 +15,6 @@ on:
         description: Version to build, a file of versions/
         type: choice
         options:
-          - open-dmav
           - qgis-dmav
       tag:
         description: Publish the release <version>-<tag>; empty for a build only
