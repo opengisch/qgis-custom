@@ -1,6 +1,6 @@
-# Publishes the last build of a version on main as the release <version>-<tag> of this repo.
-# Run it by hand: Actions → release → Run workflow. It also tags the composed commit in opengisch/QGIS, so that the
-# commit stays when the branch of the version moves on.
+# Publishes the last build of a version on main as the release <version>-<tag> of this repo, and tags its Docker
+# image <version>-<tag>. Run it by hand: Actions → release → Run workflow. It also tags the composed commit in
+# opengisch/QGIS, so that the commit stays when the branch of the version moves on.
 name: release
 
 on:
@@ -19,11 +19,13 @@ on:
 permissions:
   contents: write
   actions: read
+  packages: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     env:
+      IMAGE: ghcr.io/${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ inputs.version }}
       NAME: ${{ inputs.version }}-${{ inputs.tag }}
@@ -62,7 +64,22 @@ jobs:
           github-token: ${{ github.token }}
           path: dist
 
-      # Before the tag in opengisch/QGIS: a release that exists already stops the run before it changes anything.
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find the image of the build
+        run: |
+          composed=$(sed -n 's/^Composed: //p' "dist/$VERSION.md")
+          if ! docker buildx imagetools inspect "$IMAGE:$composed" > /dev/null; then
+            echo "::error::The build has no image $IMAGE:$composed: run the workflow build again"
+            exit 1
+          fi
+          echo "COMPOSED=$composed" >> "$GITHUB_ENV"
+
+      # Before the tags: a release that exists already stops the run before it changes anything.
       # The tag goes on main, not on the commit of the build: GITHUB_TOKEN may not tag a commit whose workflows
       # differ from those of main.
       - name: Publish the release
@@ -75,5 +92,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.QGIS_FORK_TOKEN }}
         run: |
-          gh api repos/opengisch/QGIS/git/refs -f "ref=refs/tags/qgis-custom/$NAME" \
-            -f "sha=$(sed -n 's/^Composed: //p' "dist/$VERSION.md")"
+          gh api repos/opengisch/QGIS/git/refs -f "ref=refs/tags/qgis-custom/$NAME" -f "sha=$COMPOSED"
+
+      - name: Tag the image
+        run: docker buildx imagetools create --tag "$IMAGE:$NAME" "$IMAGE:$COMPOSED"

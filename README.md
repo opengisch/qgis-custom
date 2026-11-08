@@ -6,7 +6,7 @@ qgis/QGIS does not have yet.
 - A **version** is a file of [`versions/`](versions). It names a base and what is merged onto it, in order.
 - [`compose.py`](compose.py) merges a version into the branch `qgis-custom/<version>`.
 - The workflow [`build`](.github/workflows/build.yml) pushes that branch to
-  [opengisch/QGIS](https://github.com/opengisch/QGIS) and builds it.
+  [opengisch/QGIS](https://github.com/opengisch/QGIS) and builds it, for Windows and as a Docker image.
 - The workflow [`release`](.github/workflows/release.yml) publishes a build as a release.
 - `rr-cache/` keeps the resolutions of merge conflicts. All versions share them.
 
@@ -58,17 +58,34 @@ opengisch/QGIS and add it as an entry.
 ## Build
 
 - **Pull request:** composes every version, without a build.
-- **Push to main:** composes every version, pushes each one to opengisch/QGIS, and builds it. The zip is kept as an
-  artifact for 90 days. A push that changes only this README or `release.yml` builds nothing. To build again without
-  a commit, for example to take a newer master, run the workflow by hand: Actions → build → Run workflow.
+- **Push to main:** composes every version, pushes each one to opengisch/QGIS, and builds it: a zip for Windows, kept
+  as an artifact for 90 days, and a [Docker image](#docker-image). A push that changes only this README or
+  `release.yml` builds nothing. To build again without a commit, for example to take a newer master, run the workflow
+  by hand: Actions → build → Run workflow.
 
-The build follows `windows-qt6.yml` of qgis/QGIS. The head of [`build.yml`](.github/workflows/build.yml) names the
-upstream commit it follows. When upstream changes its steps or its flags, copy the change.
+The Windows build follows `windows-qt6.yml` of qgis/QGIS. The head of [`build.yml`](.github/workflows/build.yml) names
+the upstream commit it follows. When upstream changes its steps or its flags, copy the change.
 
 The dependencies come from the vcpkg binary cache of qgis/QGIS. ccache keeps the objects that are already compiled.
 The first build, or a build after a big jump of master, can take longer than the 6 h limit of a job. The build step
 stops at 5 h 30, and the cache is saved. Click "Re-run failed jobs": the run builds the same commit, and continues
 where it stopped.
+
+## Docker image
+
+The image `ghcr.io/opengisch/qgis-custom` has QGIS with its desktop and its Python, for Linux amd64. The
+[`Dockerfile`](Dockerfile) builds the composed commit on `qgis/qgis3-build-deps-ubuntu-qt6:master`, the build
+dependencies of the CI of qgis/QGIS, on Ubuntu 26.04, without 3D, GRASS or PDAL. Its tags:
+
+- `<version>`, for example `qgis-dmav`: the last build of the version on main.
+- `<version>-<tag>`, for example `qgis-dmav-1`: a release.
+- The composed commit, for each build.
+
+```sh
+docker run --rm ghcr.io/opengisch/qgis-custom:qgis-dmav python3 -c "from qgis.core import Qgis; print(Qgis.version())"
+```
+
+`qgis` starts the desktop on the display of `DISPLAY`. The head of the `Dockerfile` says how to build it locally.
 
 ## Release
 
@@ -77,7 +94,8 @@ The workflow `release` makes the releases. Do not create a release on the Releas
 1. In Actions → build, check that the last run on main succeeded, and that no run is in progress.
 2. Actions → release → Run workflow. Choose the version, and type a tag, for example `1`.
 3. When the run is done, the release `<version>-<tag>`, for example `qgis-dmav-1`, is on the Releases page. Its
-   asset is the zip `qgis-custom-<version>-<tag>-win64.zip`, and its notes are the manifest.
+   asset is the zip `qgis-custom-<version>-<tag>-win64.zip`, and its notes are the manifest. The Docker image of the
+   build has the tag `<version>-<tag>` too.
 
 From a terminal:
 
@@ -85,10 +103,10 @@ From a terminal:
 gh workflow run release.yml -R opengisch/qgis-custom -f version=qgis-dmav -f tag=1
 ```
 
-The release does not build: it publishes the zip of the last build of that version on main, in a few minutes. It
-also tags the composed commit `qgis-custom/<version>-<tag>` in opengisch/QGIS, so that the commit stays when the
-branch moves on. The run fails, and changes nothing, while a build of main is running, when no build of the version
-on main is left, or when the release exists already.
+The release does not build: it publishes the zip and the image of the last build of that version on main, in a few
+minutes. It also tags the composed commit `qgis-custom/<version>-<tag>` in opengisch/QGIS, so that the commit stays
+when the branch moves on. The run fails, and changes nothing, while a build of main is running, when no build of the
+version on main is left, when that build has no image, or when the release exists already.
 
 To redo a release, delete it, with its tag here and its tag in opengisch/QGIS, and run the workflow again:
 
@@ -101,4 +119,5 @@ gh api -X DELETE repos/opengisch/QGIS/git/refs/tags/qgis-custom/qgis-dmav-1
 
 The secret `QGIS_FORK_TOKEN` pushes the branches and tags to opengisch/QGIS. It is a fine-grained token or a GitHub
 App token, on opengisch/QGIS only, with **Contents** and **Workflows** write. Workflows write is necessary because
-the commits of master change `.github/workflows/`.
+the commits of master change `.github/workflows/`. The Docker image needs no secret: the workflows push it with
+their `GITHUB_TOKEN`.
