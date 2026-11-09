@@ -107,17 +107,41 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The tag of the composed commit is the one the workflow release finds the image of a build by
+      # Loaded, and pushed once tested. The tag of the composed commit is the one the workflow release finds the image of
+      # a build by.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           build-args: qgis_ref=${{ env.SHA }}
-          push: true
+          load: true
           tags: |
             ${{ env.IMAGE }}:${{ matrix.version }}
             ${{ env.IMAGE }}:${{ env.SHA }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ env.SHA }}
+
+      # The desktop starts with the core plugins, which need the Python modules of the image, and with the SVG icons
+      - name: Test the desktop
+        timeout-minutes: 10
+        run: |
+          cat > test.py <<'EOF'
+          import qgis.utils
+          from qgis.core import Qgis, QgsApplication
+          from qgis.PyQt.QtCore import QTimer
+          from qgis.PyQt.QtGui import QImageReader
+
+          def check():
+              missing = {"MetaSearch", "db_manager", "processing"} - set(qgis.utils.active_plugins)
+              svg = b"svg" in [bytes(f) for f in QImageReader.supportedImageFormats()]
+              print(f"QGIS {Qgis.version()}, plugins not loaded: {sorted(missing)}, SVG: {svg}", flush=True)
+              QgsApplication.exit(0 if svg and not missing else 1)
+
+          QTimer.singleShot(3000, check)
+          EOF
+          docker run --rm -v "$PWD/test.py:/test.py:ro" "$IMAGE:$SHA" xvfb-run -a qgis --nologo --code /test.py
+
+      - name: Push
+        run: docker push --all-tags "$IMAGE"
 
   windows:
     needs: compose
