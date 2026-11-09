@@ -32,10 +32,10 @@ branch = "my-fix"
 To add a version, add its file and add its name to the `version` options in
 [`release.yml`](.github/workflows/release.yml).
 
-A source, the base or an entry, is **followed** unless it sets `follow = false`. Each hour, the workflow
-[`follow`](.github/workflows/follow.yml) runs the workflow build when a followed source has commits that the last
-build lacks. A base on master is usually not followed: it moves each day, and each build takes its head anyway. To
-check by hand which followed sources the last build lacks: `./compose.py --check <version>`, which needs
+A source, the base or an entry, is **followed** unless it sets `follow = false`. Each night at midnight in Paris,
+the workflow [`follow`](.github/workflows/follow.yml) runs the workflow build when a followed source has commits that
+the last build lacks. A base on master is usually not followed: it moves each day, and each build takes its head
+anyway. To check by hand which followed sources the last build lacks: `./compose.py --check <version>`, which needs
 [gh](https://cli.github.com/).
 
 ## Compose locally
