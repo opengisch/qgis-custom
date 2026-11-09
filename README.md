@@ -74,8 +74,10 @@ where it stopped.
 ## Docker image
 
 The image `ghcr.io/opengisch/qgis-custom` has QGIS with its desktop and its Python, for Linux amd64. The
-[`Dockerfile`](Dockerfile) builds the composed commit on `qgis/qgis3-build-deps-ubuntu-qt6:master`, the build
-dependencies of the CI of qgis/QGIS, on Ubuntu 26.04, without 3D, GRASS or PDAL. Its tags:
+[`Dockerfile`](Dockerfile) builds the composed commit as
+[qgis/qgis-slim](https://github.com/qgis/qgis-docker/tree/main/slim) is built, with the desktop on top: Ubuntu 26.04,
+GDAL with Arrow and Parquet, without 3D, GRASS, PDAL or server. Its head names the upstream commit it copies. When
+upstream changes `slim/Dockerfile`, copy the change. Its tags:
 
 - `<version>`, for example `qgis-dmav`: the last build of the version on main.
 - `<version>-<tag>`, for example `qgis-dmav-1`: a release.
