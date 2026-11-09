@@ -2,8 +2,9 @@
 
 # QGIS with its desktop, built from a composed version in opengisch/QGIS. A copy of slim/Dockerfile of qgis/qgis-docker,
 # the image qgis/qgis-slim, at 9fe8e4c03fef211a29dbd68a0fc6ea06d84eca3a, with the desktop on top: QGIS comes from
-# qgis_repository, is built with the desktop and keeps its desktop files, and the image has Mesa, the SVG icons of Qt, a
-# font and the Python modules of the desktop plugins, and no offscreen platform. The workflow build pushes it to
+# qgis_repository, is built with the desktop and without Wayland and keeps its desktop files, and the image has Mesa, the
+# SVG icons of Qt, a font and the Python modules of the desktop plugins, and no offscreen platform. The workflow build
+# pushes it to
 # ghcr.io/opengisch/qgis-custom. Locally:
 #   docker build --platform linux/amd64 --build-arg qgis_ref=qgis-custom/qgis-dmav -t qgis-custom .
 
@@ -92,6 +93,8 @@ RUN --mount=type=cache,id=ccache,target=/root/.ccache \
       -DWITH_SERVER=OFF \
       -DWITH_3D=OFF \
       -DWITH_QUICK=OFF \
+      # the desktop runs on X11, Qt has no Wayland platform in the image
+      -DWITH_WAYLAND=OFF \
       -DWITH_CUSTOM_WIDGETS=OFF \
       # the gui library is required by the processing plugin
       -DWITH_GUI=ON \
