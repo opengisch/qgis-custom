@@ -5,6 +5,8 @@
 """Compose a version of QGIS: merge the PRs and branches of versions/<name>.toml onto its base.
 
 Usage: ./compose.py <name>. It makes the branch qgis-custom/<name> in work/QGIS, and the manifest work/<name>.md.
+       ./compose.py --check <name>. It prints, through gh, the followed sources that have commits the branch
+       qgis-custom/<name> of opengisch/QGIS lacks. A source is followed unless it sets follow = false.
 """
 
 import subprocess
@@ -16,6 +18,8 @@ ROOT = Path(__file__).resolve().parent
 WORK = ROOT / "work" / "QGIS"
 # The other repos are fetched by URL: only this one is cloned without its blobs.
 ORIGIN = "qgis/QGIS"
+# Where the workflow build pushes the composed branches
+FORK = "opengisch/QGIS"
 
 
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -23,6 +27,13 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     if check and result.returncode:
         sys.exit(f"git {' '.join(args)} failed:\n{result.stderr}")
     return result
+
+
+def gh(path: str, jq: str) -> str:
+    result = subprocess.run(["gh", "api", path, "--jq", jq], check=False, text=True, capture_output=True)
+    if result.returncode:
+        sys.exit(f"gh api {path} failed:\n{result.stderr}")
+    return result.stdout.strip()
 
 
 def fetch(repo: str, ref: str) -> str:
@@ -35,9 +46,29 @@ def merging() -> bool:
     return git("rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode == 0
 
 
-def main(name: str) -> None:
-    version = tomllib.loads((ROOT / "versions" / f"{name}.toml").read_text())
+def sources(version: dict) -> list[tuple[str, str, str, dict]]:
+    """The base, then the entries to merge: the label, repo and ref of each, and its table."""
     base = version["base"]
+    result = [(f"{base['repo']} {base['ref']}", base["repo"], base["ref"], base)]
+    for entry in version.get("merge", []):
+        if "pr" in entry:
+            result.append((f"{base['repo']}#{entry['pr']}", base["repo"], f"pull/{entry['pr']}/head", entry))
+        else:
+            result.append((f"{entry['repo']} {entry['branch']}", entry["repo"], entry["branch"], entry))
+    return result
+
+
+def check(name: str, version: dict) -> None:
+    for label, repo, ref, source in sources(version):
+        if source.get("follow", True):
+            head = gh(f"repos/{repo}/commits/{ref}", ".sha")
+            # ahead or identical: the head is among the commits of the composed branch
+            if gh(f"repos/{FORK}/compare/{head}...qgis-custom/{name}", ".status") not in ("ahead", "identical"):
+                print(label)
+
+
+def compose(name: str, version: dict) -> None:
+    (base_label, base_repo, base_ref, _), *entries = sources(version)
 
     if not WORK.exists():
         subprocess.run(
@@ -55,17 +86,12 @@ def main(name: str) -> None:
     if merging() or git("status", "--porcelain", "--untracked-files=no").stdout:
         sys.exit(f"{WORK} has a merge in progress or changes: finish it with git commit, or git merge --abort.")
 
-    sha = fetch(base["repo"], base["ref"])
+    sha = fetch(base_repo, base_ref)
     git("checkout", "--no-track", "-B", f"qgis-custom/{name}", sha)
-    manifest = [f"# {name}", "", f"Base: {base['repo']} {base['ref']} ({base['repo']}@{sha})", ""]
+    manifest = [f"# {name}", "", f"Base: {base_label} ({base_repo}@{sha})", ""]
 
-    for entry in version.get("merge", []):
-        if "pr" in entry:
-            label, repo = f"{base['repo']}#{entry['pr']}", base["repo"]
-            sha = fetch(repo, f"pull/{entry['pr']}/head")
-        else:
-            label, repo = f"{entry['repo']} {entry['branch']}", entry["repo"]
-            sha = fetch(repo, entry["branch"])
+    for label, repo, ref, entry in entries:
+        sha = fetch(repo, ref)
         print(f"merging {label}")
         result = git("merge", "--no-ff", "--no-edit", "-m", f"merge {label}", sha, check=False)
         if result.returncode:
@@ -84,6 +110,8 @@ def main(name: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+    if not args or args[:-1] not in ([], ["--check"]):
         sys.exit(__doc__)
-    main(sys.argv[1])
+    version = tomllib.loads((ROOT / "versions" / f"{args[-1]}.toml").read_text())
+    (check if args[0] == "--check" else compose)(args[-1], version)

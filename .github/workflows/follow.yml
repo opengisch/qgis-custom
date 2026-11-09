@@ -1,0 +1,34 @@
+# Runs the workflow build when a followed source of a version, a PR or a branch, has commits that the composed branch
+# of the version in opengisch/QGIS lacks. A source is followed unless it sets follow = false. Each hour, or by hand.
+name: follow
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A build pushes the composed branch when it starts: one that runs, or that failed, is not started again
+      - name: Check every version, and build when one lacks commits
+        run: |
+          for version in versions/*.toml; do
+            behind=$(python3 compose.py --check "$(basename "$version" .toml)")
+            if [ -n "$behind" ]; then
+              echo "$(basename "$version" .toml) lacks the commits of: $behind"
+              gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref main
+              exit
+            fi
+          done

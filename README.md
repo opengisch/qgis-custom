@@ -18,6 +18,7 @@ Each build takes the current heads of the base and of the PRs. Its manifest reco
 [base]
 repo = "qgis/QGIS"
 ref = "master"            # a branch or a tag
+follow = false            # see below
 
 [[merge]]
 pr = 68084                # a PR of the base repo
@@ -30,6 +31,12 @@ branch = "my-fix"
 
 To add a version, add its file and add its name to the `version` options in
 [`release.yml`](.github/workflows/release.yml).
+
+A source, the base or an entry, is **followed** unless it sets `follow = false`. Each hour, the workflow
+[`follow`](.github/workflows/follow.yml) runs the workflow build when a followed source has commits that the last
+build lacks. A base on master is usually not followed: it moves each day, and each build takes its head anyway. To
+check by hand which followed sources the last build lacks: `./compose.py --check <version>`, which needs
+[gh](https://cli.github.com/).
 
 ## Compose locally
 
@@ -59,9 +66,12 @@ opengisch/QGIS and add it as an entry.
 
 - **Pull request:** composes every version, without a build.
 - **Push to main:** composes every version, pushes each one to opengisch/QGIS, and builds it: a zip for Windows, kept
-  as an artifact for 90 days, and a [Docker image](#docker-image). A push that changes only this README or
-  `release.yml` builds nothing. To build again without a commit, for example to take a newer master, run the workflow
-  by hand: Actions → build → Run workflow.
+  as an artifact for 90 days, and a [Docker image](#docker-image). A push that changes only this README,
+  `release.yml` or `follow.yml` builds nothing. To build again without a commit, for example to take a newer master,
+  run the workflow by hand: Actions → build → Run workflow.
+- **A followed source moves:** the workflow `follow` runs the build, as a run by hand.
+
+A push while a build runs does not cancel it: the new build waits, and starts from the head of main.
 
 The Windows build follows `windows-qt6.yml` of qgis/QGIS. The head of [`build.yml`](.github/workflows/build.yml) names
 the upstream commit it follows. When upstream changes its steps or its flags, copy the change.
@@ -77,7 +87,8 @@ The image `ghcr.io/opengisch/qgis-custom` has QGIS with its desktop and its Pyth
 [`Dockerfile`](Dockerfile) builds the composed commit as
 [qgis/qgis-slim](https://github.com/qgis/qgis-docker/tree/main/slim) is built, with the desktop on top: Ubuntu 26.04,
 GDAL with Arrow and Parquet, without 3D, GRASS, PDAL or server. Its head names the upstream commit it copies. When
-upstream changes `slim/Dockerfile`, copy the change. Its tags:
+upstream changes `slim/Dockerfile`, copy the change. The job saves its ccache even when the build or its test fails.
+The test starts the desktop, and the image is pushed only when it passes. Its tags:
 
 - `<version>`, for example `qgis-dmav`: the last build of the version on main.
 - `<version>-<tag>`, for example `qgis-dmav-1`: a release.

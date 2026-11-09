@@ -1,6 +1,8 @@
 [base]
 repo = "qgis/QGIS"
 ref = "master"
+# master moves each day: a build takes it, the check does not
+follow = false
 
 [[merge]]
 pr = 68084
