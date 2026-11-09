@@ -15,5 +15,4 @@ repo = "3nids/QGIS"
 branch = "custom-commit-error-handler"
 
 [[merge]]
-repo = "3nids/QGIS"
-branch = "groups-icons"
+pr = 68125
