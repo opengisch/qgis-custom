@@ -86,7 +86,8 @@ where it stopped.
 The image `ghcr.io/opengisch/qgis-custom` has QGIS with its desktop and its Python, for Linux amd64. The
 [`Dockerfile`](Dockerfile) builds the composed commit as
 [qgis/qgis-slim](https://github.com/qgis/qgis-docker/tree/main/slim) is built, with the desktop on top: Ubuntu 26.04,
-GDAL with Arrow and Parquet, without 3D, GRASS, PDAL or server. Its head names the upstream commit it copies. When
+GDAL with Arrow and Parquet, without 3D, GRASS, PDAL or server. It also builds GEOS 3.15, which Ubuntu 26.04 has at
+3.14. Its head names the upstream commit it copies. When
 upstream changes `slim/Dockerfile`, copy the change. The job saves its ccache even when the build or its test fails.
 The test starts the desktop, and the image is pushed only when it passes. Its tags:
 

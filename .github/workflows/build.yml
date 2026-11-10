@@ -132,7 +132,7 @@ jobs:
           def check():
               missing = {"MetaSearch", "db_manager", "processing"} - set(qgis.utils.active_plugins)
               svg = b"svg" in [bytes(f) for f in QImageReader.supportedImageFormats()]
-              print(f"QGIS {Qgis.version()}, plugins not loaded: {sorted(missing)}, SVG: {svg}", flush=True)
+              print(f"QGIS {Qgis.version()}, GEOS {Qgis.geosVersion()}, plugins not loaded: {sorted(missing)}, SVG: {svg}", flush=True)
               QgsApplication.exit(0 if svg and not missing else 1)
 
           QTimer.singleShot(3000, check)
