@@ -106,12 +106,6 @@ jobs:
           RUN --mount=type=cache,id=ccache,target=/root/.ccache --mount=target=/ccache cp -a /ccache/. /root/.ccache/
           EOF
 
-      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       # Loaded, and pushed once tested. The tag of the composed commit is the one the workflow release finds the image
       # of a build by.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -144,6 +138,13 @@ jobs:
           QTimer.singleShot(3000, check)
           EOF
           docker run --rm -v "$PWD/test.py:/test.py:ro" "$IMAGE:$SHA" xvfb-run -a qgis --nologo --code /test.py
+
+      # Just before the push: ghcr refused the push of a login made before a build of hours
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push
         run: docker push --all-tags "$IMAGE"
