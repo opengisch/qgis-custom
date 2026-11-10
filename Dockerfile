@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # QGIS with its desktop, built from a composed version in opengisch/QGIS. A copy of slim/Dockerfile of qgis/qgis-docker,
-# the image qgis/qgis-slim, at 9fe8e4c03fef211a29dbd68a0fc6ea06d84eca3a, with the desktop on top: QGIS comes from
-# qgis_repository, is built with the desktop and without Wayland, and keeps its desktop files; the image has Mesa, the
-# SVG icons of Qt, a font and the Python modules of the desktop plugins, and no offscreen platform. The workflow build
-# pushes it to ghcr.io/opengisch/qgis-custom. Locally:
+# the image qgis/qgis-slim, at 9fe8e4c03fef211a29dbd68a0fc6ea06d84eca3a, with the desktop on top, and GEOS 3.15 built
+# from source: QGIS comes from qgis_repository, is built with the desktop and without Wayland, and keeps its desktop
+# files; the image has Mesa, the SVG icons of Qt, a font and the Python modules of the desktop plugins, and no offscreen
+# platform. The workflow build pushes it to ghcr.io/opengisch/qgis-custom. Locally:
 #   docker build --platform linux/amd64 --build-arg qgis_ref=qgis-custom/qgis-dmav -t qgis-custom .
 
 ARG os=ubuntu
@@ -22,6 +22,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CCACHE_DIR=/root/.ccache
+
+# GEOS, which Ubuntu resolute has at 3.14, as GDAL is below: over the GEOS of the packages, which SpatiaLite keeps in the
+# image. Its C API, the one that QGIS, GDAL and SpatiaLite use, keeps its soname: ldconfig takes the newer library.
+ARG geos_version=3.15.0
+RUN --mount=type=cache,id=ccache,target=/root/.ccache \
+    mkdir -p /src/geos && cd /src/geos \
+    && curl -fsSL https://github.com/libgeos/geos/archive/refs/tags/${geos_version}.tar.gz | tar xz --strip-components=1 \
+    && cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+      -DBUILD_TESTING=OFF \
+      -DBUILD_GEOSOP=OFF \
+    && cmake --build build \
+    && cmake --install build --strip \
+    && DESTDIR=/install cmake --install build --strip \
+    && rm -rf /src/geos
 
 # GDAL is installed in the builder to compile QGIS against it, and in /install for the final image
 ARG gdal_version=v3.13.3
