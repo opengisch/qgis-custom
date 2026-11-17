@@ -4,9 +4,11 @@ ref = "master"
 # master moves each day: a build takes it, the check does not
 follow = false
 
+# [processing] add an option to open output files with system
 [[merge]]
 pr = 68084
 
+# [processing] improve detect changes algorithm
 [[merge]]
 pr = 68058
 
@@ -14,5 +16,6 @@ pr = 68058
 repo = "3nids/QGIS"
 branch = "custom-commit-error-handler"
 
+# custom icon for layer tree groups
 [[merge]]
-pr = 68125
+pr = 68224
