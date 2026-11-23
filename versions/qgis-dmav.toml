@@ -15,7 +15,3 @@ pr = 68058
 [[merge]]
 repo = "3nids/QGIS"
 branch = "custom-commit-error-handler"
-
-# custom icon for layer tree groups
-[[merge]]
-pr = 68224
