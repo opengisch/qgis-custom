@@ -149,17 +149,20 @@ jobs:
       - name: Push
         run: docker push --all-tags "$IMAGE"
 
+      # As one tar: the local exporter, file by file, deadlocks on the thousands of files of the ccache
       - id: extract
         name: Take the ccache out of the cache mount
         if: always() && steps.inject.outcome == 'success'
+        timeout-minutes: 15
         run: |
           rm -rf ccache && mkdir ccache
-          docker buildx build -f - --output type=local,dest=ccache ccache <<'EOF'
+          docker buildx build -f - --output type=tar,dest=ccache.tar ccache <<'EOF'
           FROM ubuntu:resolute AS ccache
           RUN --mount=type=cache,id=ccache,target=/root/.ccache cp -a /root/.ccache /out
           FROM scratch
           COPY --from=ccache /out /
           EOF
+          tar -xf ccache.tar -C ccache && rm ccache.tar
 
       - if: always() && steps.extract.outcome == 'success'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
