@@ -101,7 +101,7 @@ upstream changes `slim/Dockerfile`, copy the change. The job saves its ccache ev
 The test starts the desktop, and the image is pushed only when it passes. Its tags:
 
 - `<version>`, for example `qgis-dmav`: the last build of the version on main.
-- `<version>-<tag>`, for example `qgis-dmav-1`: a release.
+- `<version>-<day>`, for example `qgis-dmav-2026-11-25`: a release.
 - The composed commit, for each build.
 
 ```sh
@@ -115,27 +115,29 @@ docker run --rm ghcr.io/opengisch/qgis-custom:qgis-dmav python3 -c "from qgis.co
 The workflow `release` makes the releases. Do not create a release on the Releases page: it gets no zip.
 
 1. In Actions → build, check that the last run on main succeeded, and that no run is in progress.
-2. Actions → release → Run workflow. Choose the version, and type a tag, for example `1`.
-3. When the run is done, the release `<version>-<tag>`, for example `qgis-dmav-1`, is on the Releases page. Its
-   asset is the zip `qgis-custom-<version>-<tag>-win64.zip`, and its notes are the manifest. The Docker image of the
-   build has the tag `<version>-<tag>` too.
+2. Actions → release → Run workflow. Choose the version.
+3. When the run is done, the release `<version>-<day>`, for example `qgis-dmav-2026-11-25`, is on the Releases page.
+   Its day is the [release name](#release-name) of its QGIS. Its asset is the zip
+   `qgis-custom-<version>-<day>-win64.zip`, and its notes are the manifest. The Docker image of the build has the tag
+   `<version>-<day>` too.
 
-From a terminal:
+From a terminal, for the version `qgis-dmav`:
 
 ```sh
-gh workflow run release.yml -R opengisch/qgis-custom -f version=qgis-dmav -f tag=1
+gh workflow run release.yml -R opengisch/qgis-custom
 ```
 
 The release does not build: it publishes the zip and the image of the last build of that version on main, in a few
-minutes. It also tags the composed commit `qgis-custom/<version>-<tag>` in opengisch/QGIS, so that the commit stays
+minutes. It also tags the composed commit `qgis-custom/<version>-<day>` in opengisch/QGIS, so that the commit stays
 when the branch moves on. The run fails, and changes nothing, while a build of main is running, when no build of the
-version on main is left, when that build has no image, or when the release exists already.
+version on main is left, when that build has no image or names no day, or when the release exists already: one
+release a day.
 
 To redo a release, delete it, with its tag here and its tag in opengisch/QGIS, and run the workflow again:
 
 ```sh
-gh release delete qgis-dmav-1 -R opengisch/qgis-custom --cleanup-tag --yes
-gh api -X DELETE repos/opengisch/QGIS/git/refs/tags/qgis-custom/qgis-dmav-1
+gh release delete qgis-dmav-2026-11-25 -R opengisch/qgis-custom --cleanup-tag --yes
+gh api -X DELETE repos/opengisch/QGIS/git/refs/tags/qgis-custom/qgis-dmav-2026-11-25
 ```
 
 ## Setup

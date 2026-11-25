@@ -1,6 +1,6 @@
-# Publishes the last build of a version on main as the release <version>-<tag> of this repo, and tags its Docker
-# image <version>-<tag>. Run it by hand: Actions → release → Run workflow. It also tags the composed commit in
-# opengisch/QGIS, so that the commit stays when the branch of the version moves on.
+# Publishes the last build of a version on main as the release <version>-<day> of this repo, the day its QGIS is named
+# by, and tags its Docker image <version>-<day>. Run it by hand: Actions → release → Run workflow. It also tags the
+# composed commit in opengisch/QGIS, so that the commit stays when the branch of the version moves on.
 name: release
 
 on:
@@ -9,12 +9,9 @@ on:
       version:
         description: Version to release, a file of versions/
         type: choice
+        default: qgis-dmav
         options:
           - qgis-dmav
-      tag:
-        description: The release is named <version>-<tag>, for example qgis-dmav-1 for the tag 1
-        type: string
-        required: true
 
 permissions:
   contents: write
@@ -28,7 +25,6 @@ jobs:
       IMAGE: ghcr.io/${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ inputs.version }}
-      NAME: ${{ inputs.version }}-${{ inputs.tag }}
     steps:
       - name: Find the last build of the version on main
         id: build
@@ -70,14 +66,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find the image of the build
+      # The manifest is titled "# <version> <day>" since compose.py names the release of QGIS by its day
+      - name: Find the image and the day of the build
         run: |
           composed=$(sed -n 's/^Composed: //p' "dist/$VERSION.md")
           if ! docker buildx imagetools inspect "$IMAGE:$composed" > /dev/null; then
             echo "::error::The build has no image $IMAGE:$composed: run the workflow build again"
             exit 1
           fi
+          day=$(sed -n '1s/^# [^ ]* \([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)$/\1/p' "dist/$VERSION.md")
+          if [ -z "$day" ]; then
+            echo "::error::The build names no day: it is older than the release names of compose.py, run the workflow build"
+            exit 1
+          fi
           echo "COMPOSED=$composed" >> "$GITHUB_ENV"
+          echo "NAME=$VERSION-$day" >> "$GITHUB_ENV"
 
       # Before the tags: a release that exists already stops the run before it changes anything.
       # The tag goes on main, not on the commit of the build: GITHUB_TOKEN may not tag a commit whose workflows
