@@ -2,16 +2,19 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Compose a version of QGIS: merge the PRs and branches of versions/<name>.toml onto its base.
+"""Compose a version of QGIS: merge the PRs and branches of versions/<name>.toml onto its base, and name its release
+by the day, YYYY-MM-DD in UTC.
 
 Usage: ./compose.py <name>. It makes the branch qgis-custom/<name> in work/QGIS, and the manifest work/<name>.md.
        ./compose.py --check <name>. It prints, through gh, the followed sources that have commits the branch
        qgis-custom/<name> of opengisch/QGIS lacks. A source is followed unless it sets follow = false.
 """
 
+import re
 import subprocess
 import sys
 import tomllib
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -104,6 +107,16 @@ def compose(name: str, version: dict) -> None:
             git("commit", "--no-edit")
         note = f": {entry['note']}" if "note" in entry else ""
         manifest.append(f"- {label} ({repo}@{sha}){note}")
+
+    # The release name of QGIS, in place of Master: a plugin reads it with Qgis.releaseName() to require a build
+    day = datetime.now(UTC).date().isoformat()
+    cmake = WORK / "CMakeLists.txt"
+    text, count = re.subn(r'set\(RELEASE_NAME "[^"]*"\)', f'set(RELEASE_NAME "{day}")', cmake.read_text(), count=1)
+    if not count:
+        sys.exit(f"{cmake} sets no RELEASE_NAME.")
+    cmake.write_text(text)
+    git("commit", "-m", f"name the release {day}", "CMakeLists.txt")
+    manifest[0] += f" {day}"
 
     manifest += ["", f"Composed: {git('rev-parse', 'HEAD').stdout.strip()}", ""]
     (ROOT / "work" / f"{name}.md").write_text("\n".join(manifest))
