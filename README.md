@@ -53,8 +53,9 @@ manifest `work/qgis-dmav.md`.
 The last commit of a composed branch names the release of QGIS by the day of the compose, in UTC, in place of
 `Master`: `2026-11-25`. QGIS shows it in its version, `4.5.0-2026-11-25`, and `Qgis.releaseName()` returns it alone: a
 plugin reads it to require a build of that day or later. The builds of a day share it. The manifest names it in its
-title. Without `Master`, the title of the window no longer shows the commit, and the links of Processing to its source
-go to a release branch.
+title. Without `Master`, each check of QGIS for it takes the path of a release: the title of the window no longer shows
+the commit, the About dialog and `qgis --version` name the code branch "Release 4.5", and the links to the source go to
+a branch `release-4_5`.
 
 ## Conflicts
 
